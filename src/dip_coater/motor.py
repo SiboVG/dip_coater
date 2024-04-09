@@ -44,7 +44,7 @@ class TMC2209_MotorDriver:
 
         Args:
             vactual (int): value for VACTUAL
-            duration (float): after this time in ms, vactual will be set to 0 (Default value = 0)
+            duration (float): after this time in ns, vactual will be set to 0 (Default value = 0)
             acceleration (int): use this for a velocity ramp (Default value = 0)
             show_stallguard_result (bool): prints StallGuard Result during movement
                 (Default value = False)
@@ -73,20 +73,20 @@ class TMC2209_MotorDriver:
         if duration == 0:
             return -1
 
-        self._starttime = time.time_ns()
-        current_time = time.time_ns()
-        while current_time < self._starttime+duration*1e6:
+        self._starttime_ns = time.time_ns()
+        current_time_ns = time.time_ns()
+        while current_time_ns < self._starttime_ns+duration:
             if self.tmc._stop == StopMode.HARDSTOP:
                 break
             if acceleration != 0:
-                time_to_stop = self._starttime+duration*1e6-abs(current_vactual/acceleration)*1e9
+                time_to_stop_ns = self._starttime_ns+duration-abs(current_vactual/acceleration)*1e9
                 if self.tmc._stop == StopMode.SOFTSTOP:
-                    time_to_stop = current_time-1
-            if acceleration != 0 and current_time > time_to_stop:
+                    time_to_stop_ns = current_time_ns-1
+            if acceleration != 0 and current_time_ns > time_to_stop_ns:
                 current_vactual -= acceleration*sleeptime
                 self.tmc.set_vactual(int(round(current_vactual)))
                 time.clock_nanosleep(sleeptime)
-            elif acceleration != 0 and abs(current_vactual)<abs(vactual):
+            elif acceleration != 0 and abs(current_vactual) < abs(vactual):
                 current_vactual += acceleration*sleeptime
                 self.tmc.set_vactual(int(round(current_vactual)))
                 time.clock_nanosleep(sleeptime)
@@ -98,7 +98,7 @@ class TMC2209_MotorDriver:
                 self.tmc.tmc_logger.log(f"TStep result: {self.tmc.get_tstep()}",
                                     Loglevel.INFO)
                 time.sleep(0.1)
-            current_time = time.time_ns()
+            current_time_ns = time.time_ns()
         self.tmc.set_vactual(0)
         return self.tmc._stop
 
@@ -119,7 +119,7 @@ class TMC2209_MotorDriver:
         """
         vactual = tmc_math.rps_to_vactual(rps, self.tmc._steps_per_rev)
         if revolutions !=0:
-            duration = abs((revolutions*1e3)/rps)
+            duration = abs((revolutions*1e9)/rps)
         if revolutions < 0:
             vactual = -vactual
         return self.set_vactual_dur_ns(vactual, duration, acceleration=acceleration)
