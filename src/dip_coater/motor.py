@@ -53,14 +53,14 @@ class TMC2209_MotorDriver:
         Returns:
             stop (enum): how the movement was finished
         """
-        self.tmc._stop = StopMode.NO
+        self._stop = StopMode.NO
         current_vactual = 0
-        sleeptime = 10  # ns
-        if vactual<0:
+        sleeptime = 0.001
+        if vactual < 0:
             acceleration = -acceleration
 
         if duration != 0:
-            self.tmc.tmc_logger.log(f"vactual: {vactual} for {duration} ms",
+            self.tmc.tmc_logger.log(f"vactual: {vactual} for {duration} sec",
                                 Loglevel.INFO)
         else:
             self.tmc.tmc_logger.log(f"vactual: {vactual}", Loglevel.INFO)
@@ -73,34 +73,34 @@ class TMC2209_MotorDriver:
         if duration == 0:
             return -1
 
-        self._starttime_ns = time.time_ns()
-        current_time_ns = time.time_ns()
-        while current_time_ns < self._starttime_ns+duration:
-            if self.tmc._stop == StopMode.HARDSTOP:
+        self._starttime = time.time_ns() // 1000000  # Convert to milliseconds
+        current_time = time.time_ns() // 1000000
+        while current_time < self._starttime + duration * 1000:  # Convert duration to milliseconds
+            if self._stop == StopMode.HARDSTOP:
                 break
             if acceleration != 0:
-                time_to_stop_ns = self._starttime_ns+duration-abs(current_vactual/acceleration)*1e9
-                if self.tmc._stop == StopMode.SOFTSTOP:
-                    time_to_stop_ns = current_time_ns-1
-            if acceleration != 0 and current_time_ns > time_to_stop_ns:
-                current_vactual -= acceleration*sleeptime
+                time_to_stop = self._starttime + duration * 1000 - abs(current_vactual / acceleration) * 1000
+                if self._stop == StopMode.SOFTSTOP:
+                    time_to_stop = current_time - 1000
+            if acceleration != 0 and current_time > time_to_stop:
+                current_vactual -= acceleration * sleeptime / 1000  # Convert sleeptime to seconds
                 self.tmc.set_vactual(int(round(current_vactual)))
-                time.clock_nanosleep(sleeptime)
+                time.sleep(sleeptime / 1000)  # Convert sleeptime to seconds
             elif acceleration != 0 and abs(current_vactual) < abs(vactual):
-                current_vactual += acceleration*sleeptime
+                current_vactual += acceleration * sleeptime / 1000  # Convert sleeptime to seconds
                 self.tmc.set_vactual(int(round(current_vactual)))
-                time.clock_nanosleep(sleeptime)
+                time.sleep(sleeptime / 1000)  # Convert sleeptime to seconds
             if show_stallguard_result:
                 self.tmc.tmc_logger.log(f"StallGuard result: {self.tmc.get_stallguard_result()}",
                                     Loglevel.INFO)
-                time.sleep(0.1)
+                time.sleep(0.001)  # Reduced sleep time for faster response
             if show_tstep:
                 self.tmc.tmc_logger.log(f"TStep result: {self.tmc.get_tstep()}",
                                     Loglevel.INFO)
-                time.sleep(0.1)
-            current_time_ns = time.time_ns()
+                time.sleep(0.001)  # Reduced sleep time for faster response
+            current_time = time.time_ns() // 1000000
         self.tmc.set_vactual(0)
-        return self.tmc._stop
+        return self._stop
 
     def set_vactual_rps_ns(self, rps, duration=0, revolutions=0, acceleration=0):
         """converts the rps parameter to a vactual value which represents
@@ -118,8 +118,8 @@ class TMC2209_MotorDriver:
             stop (enum): how the movement was finished
         """
         vactual = tmc_math.rps_to_vactual(rps, self.tmc._steps_per_rev)
-        if revolutions !=0:
-            duration = abs((revolutions*1e9)/rps)
+        if revolutions != 0:
+            duration = abs(revolutions/rps)
         if revolutions < 0:
             vactual = -vactual
         return self.set_vactual_dur_ns(vactual, duration, acceleration=acceleration)
