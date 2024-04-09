@@ -16,3 +16,6 @@ class TMC_logger:
 
     def set_loglevel(self, loglevel):
         pass
+
+    def log(self, message, loglevel=Loglevel.NONE):
+        pass
